@@ -8,6 +8,9 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
+from utils.gen_stuff import generate_stuff
+from utils.mongodb import fetch_document_content, update_document_content
+
 dotenv.load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -35,9 +38,9 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     print(f"[Thread {thread_id}] Starting PDF processing task {task_id}")
     print(f"[Thread {thread_id}] Task data: {task_data}")
     
-    # Simulate PDF processing time
-    processing_time = random.uniform(2, 5)
-    time.sleep(processing_time)
+    start_time = time.time()
+    generate_stuff("")
+    processing_time = time.time() - start_time
     
     result = {
         'task_id': task_id,
@@ -51,6 +54,72 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     print(f"[Thread {thread_id}] Completed PDF task {task_id} after {processing_time:.2f}s")
     return result
 
+def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process text task - mock implementation
+    """
+    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    thread_id = threading.current_thread().ident
+    
+    print(f"[Thread {thread_id}] Starting text processing task {task_id}")
+    print(f"[Thread {thread_id}] Task data: {task_data}")
+    
+    # Extract documentId and userId from task_data
+    document_id = task_data.get('documentId')
+    user_id = task_data.get('userId')
+    
+    if not document_id or not user_id:
+        print(f"[Thread {thread_id}] Missing documentId or userId in task data")
+        return {
+            'task_id': task_id,
+            'error': 'Missing documentId or userId',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Fetch document content from MongoDB
+    content = fetch_document_content(document_id, user_id)
+    if not content:
+        print(f"[Thread {thread_id}] Could not fetch content for document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Document not found or empty content',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Track processing time
+    start_time = time.time()
+    result_data = generate_stuff(content)
+    processing_time = time.time() - start_time
+
+    # Parse result data and save to MongoDB
+    update_success = update_document_content(document_id, user_id, result_data)
+    
+    if not update_success:
+        print(f"[Thread {thread_id}] Failed to update document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Failed to update document in MongoDB',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    result = {
+        'task_id': task_id,
+        'input': task_data,
+        'processing_time': processing_time,
+        'status': 'completed',
+        'thread_id': thread_id,
+        'processed_at': time.time()
+    }
+    
+    print(f"[Thread {thread_id}] Completed text task {task_id} after {processing_time:.2f}s")
+    return result
+
 def process_test_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process test task - mock implementation
@@ -60,10 +129,9 @@ def process_test_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     
     print(f"[Thread {thread_id}] Starting test task {task_id}")
     
-    # Simulate some processing time
-    processing_time = random.uniform(1, 3)
-    time.sleep(processing_time)
-    
+    start_time = time.time()
+    processing_time = time.time() - start_time
+        
     result = {
         'task_id': task_id,
         'input': task_data,
@@ -93,6 +161,8 @@ def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
         # Route task to appropriate processor
         if queue_name == 'process-pdf':
             result = process_pdf_task(task_data)
+        elif queue_name == 'process-text':
+            result = process_text_task(task_data)
         elif queue_name == 'test-tasks':
             result = process_test_task(task_data)
         else:
@@ -160,7 +230,7 @@ def start_worker():
         return
     
     # Queues to monitor
-    queues = ['process-pdf', 'test-tasks']
+    queues = ['process-pdf', 'process-text', 'test-tasks']
     
     print(f'Monitoring queues: {queues}')
     print('Worker is ready and waiting for tasks...\n')
