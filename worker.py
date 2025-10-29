@@ -230,7 +230,7 @@ def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
             if task_hash in processed_tasks:
                 print(f"Task already processed, skipping: {task_hash}")
                 return
-            processed_tasks.add(task_hash)
+            # processed_tasks.add(task_hash)
         
         # Route task to appropriate processor
         if queue_name == 'process-pdf':
