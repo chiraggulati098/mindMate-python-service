@@ -9,7 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
 from utils.gen_stuff import generate_stuff
-from utils.mongodb import fetch_document_content, update_document_content
+from utils.mongodb import fetch_document_content, update_document_content, fetch_document_file_url
+from utils.pdf_processor import process_pdf
+from utils.s3_client import download_file_from_url, download_file_from_s3_key, cleanup_temp_file, test_s3_bucket_access
 
 dotenv.load_dotenv()
 
@@ -35,12 +37,85 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
     thread_id = threading.current_thread().ident
     
-    print(f"[Thread {thread_id}] Starting PDF processing task {task_id}")
+    print(f"[Thread {thread_id}] Starting text processing task {task_id}")
     print(f"[Thread {thread_id}] Task data: {task_data}")
     
+    # Extract documentId and userId from task_data
+    document_id = task_data.get('documentId')
+    user_id = task_data.get('userId')
+    
+    if not document_id or not user_id:
+        print(f"[Thread {thread_id}] Missing documentId or userId in task data")
+        return {
+            'task_id': task_id,
+            'error': 'Missing documentId or userId',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Fetch fileUrl from MongoDB
+    file_url = fetch_document_file_url(document_id, user_id)
+    if not file_url:
+        print(f"[Thread {thread_id}] Could not fetch fileUrl for document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'File URL not found in document',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+
+    # Get PDF file from S3/R2
+    temp_pdf_path = download_file_from_url(file_url)
+    if not temp_pdf_path:
+        print(f"[Thread {thread_id}] Could not download PDF from {file_url}")
+        print(f"[Thread {thread_id}] Running comprehensive S3 bucket test for debugging...")
+        test_s3_bucket_access()
+        return {
+            'task_id': task_id,
+            'error': 'Failed to download PDF file',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+
+    try:
+        # Process PDF
+        content = ''.join(process_pdf(temp_pdf_path))
+        print("=============")
+        print(content)
+    finally:
+        # Always cleanup the temporary file
+        cleanup_temp_file(temp_pdf_path)
+
+    if not content:
+        print(f"[Thread {thread_id}] Could not fetch content for document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Document not found or empty content',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Track processing time
     start_time = time.time()
-    generate_stuff("")
+    result_data = generate_stuff(content)
     processing_time = time.time() - start_time
+
+    # Parse result data and save to MongoDB
+    update_success = update_document_content(document_id, user_id, result_data)
+    
+    if not update_success:
+        print(f"[Thread {thread_id}] Failed to update document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Failed to update document in MongoDB',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
     
     result = {
         'task_id': task_id,
@@ -51,9 +126,8 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
         'processed_at': time.time()
     }
     
-    print(f"[Thread {thread_id}] Completed PDF task {task_id} after {processing_time:.2f}s")
+    print(f"[Thread {thread_id}] Completed text task {task_id} after {processing_time:.2f}s")
     return result
-
 def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process text task - mock implementation

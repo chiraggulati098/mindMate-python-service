@@ -81,6 +81,52 @@ class MongoDBConnection:
             print(f"Error fetching document: {e}")
             return None
     
+    def get_document_file_url(self, document_id: str, user_id: str) -> Optional[str]:
+        """
+        Fetch document fileUrl by documentId and userId
+        
+        Args:
+            document_id (str): The document ID to search for
+            user_id (str): The user ID to verify ownership
+            
+        Returns:
+            Optional[str]: The document fileUrl if found, None otherwise
+        """
+        try:
+            # Convert string IDs to ObjectId
+            try:
+                doc_object_id = ObjectId(document_id)
+                user_object_id = ObjectId(user_id)
+            except Exception as e:
+                print(f"Invalid ObjectId format: {e}")
+                return None
+            
+            # Query for document with matching _id and userId
+            query = {
+                "_id": doc_object_id,
+                "userId": user_object_id
+            }
+            
+            document = self.collection.find_one(query)
+            
+            if document:
+                # Extract fileUrl field - try multiple possible field names
+                file_url = document.get('fileUrl', document.get('file_url', document.get('url', document.get('pdfUrl', ''))))
+                
+                if file_url:
+                    print(f"✓ Found fileUrl for document {document_id}: {file_url}")
+                    return file_url
+                else:
+                    print(f"✗ No fileUrl found for document {document_id}")
+                    return None
+            else:
+                print(f"✗ Document {document_id} not found for user {user_id}")
+                return None
+                
+        except Exception as e:
+            print(f"Error fetching document fileUrl: {e}")
+            return None
+    
     def update_document_generated_content(self, document_id: str, user_id: str, generated_data: Dict[str, Any]) -> bool:
         """
         Update document with generated content (summary, flashcards, MCQs)
@@ -126,7 +172,7 @@ class MongoDBConnection:
                     "$set": {
                         "summary": generated_data.get("summary", ""),
                         "flashcards": generated_data.get("flashcards", []),
-                        "mcq": generated_data.get("mcqs", []),
+                        "mcqs": generated_data.get("mcqs", []),
                         "summary_status": "COMPLETED",
                         "flashcard_status": "COMPLETED",
                         "mcq_status": "COMPLETED", 
@@ -191,3 +237,17 @@ def update_document_content(document_id: str, user_id: str, generated_data: Dict
     """
     connection = get_mongo_connection()
     return connection.update_document_generated_content(document_id, user_id, generated_data)
+
+def fetch_document_file_url(document_id: str, user_id: str) -> Optional[str]:
+    """
+    Convenience function to fetch document fileUrl
+    
+    Args:
+        document_id (str): The document ID
+        user_id (str): The user ID
+        
+    Returns:
+        Optional[str]: The document fileUrl if found
+    """
+    connection = get_mongo_connection()
+    return connection.get_document_file_url(document_id, user_id)
