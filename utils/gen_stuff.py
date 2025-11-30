@@ -3,7 +3,7 @@ from utils.ai_model import generate_response
 
 def generate_stuff(content):
     json_schema = {
-        "summary": "string - concise summary of the content",
+        "summary": "string - concise summary in markdown format like clear, concise notes",
         "flashcards": [
             {
                 "front": "string - question or term",
@@ -32,7 +32,7 @@ CONTENT TO ANALYZE:
 {content}
 
 INSTRUCTIONS:
-1. Create a concise summary of the main concepts and key points
+1. Create a concise summary in markdown format like clear, structured notes covering the main concepts and key points
 2. Generate up to 10 flashcards covering important terms, concepts, or facts
 3. Create up to 10 multiple choice questions (MCQs) to test understanding
 4. Return ONLY valid JSON in the exact format specified below - no additional text or explanations
@@ -44,6 +44,7 @@ IMPORTANT RULES:
 - Return ONLY the JSON object, nothing else
 - Ensure all strings are properly escaped
 - Use exactly the field names shown above
+- For the summary: Use markdown formatting with headers (##, ###), bullet points (-), bold (**text**), and italics (*text*) to create clear, organized notes
 - Generate 1-10 flashcards and 1-10 MCQs based on content richness
 - Make flashcards and MCQs educational and relevant to the content
 - For MCQs, ensure one option is clearly correct and others are plausible distractors
