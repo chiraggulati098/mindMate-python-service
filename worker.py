@@ -128,6 +128,7 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     
     print(f"[Thread {thread_id}] Completed text task {task_id} after {processing_time:.2f}s")
     return result
+
 def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process text task - mock implementation
@@ -230,15 +231,13 @@ def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
             if task_hash in processed_tasks:
                 print(f"Task already processed, skipping: {task_hash}")
                 return
-            # processed_tasks.add(task_hash)
+            processed_tasks.add(task_hash)
         
         # Route task to appropriate processor
         if queue_name == 'process-pdf':
             result = process_pdf_task(task_data)
         elif queue_name == 'process-text':
             result = process_text_task(task_data)
-        elif queue_name == 'test-tasks':
-            result = process_test_task(task_data)
         else:
             print(f"Unknown queue: {queue_name}, processing as test task")
             result = process_test_task(task_data)
@@ -304,7 +303,7 @@ def start_worker():
         return
     
     # Queues to monitor
-    queues = ['process-pdf', 'process-text', 'test-tasks']
+    queues = ['process-pdf', 'process-text']
     
     print(f'Monitoring queues: {queues}')
     print('Worker is ready and waiting for tasks...\n')
