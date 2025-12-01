@@ -12,6 +12,7 @@ from utils.gen_stuff import generate_stuff
 from utils.mongodb import fetch_document_content, update_document_content, fetch_document_file_url
 from utils.pdf_processor import process_pdf
 from utils.s3_client import download_file_from_url, download_file_from_s3_key, cleanup_temp_file, test_s3_bucket_access
+from utils.youtube_lib import get_transcript
 
 dotenv.load_dotenv()
 
@@ -32,7 +33,7 @@ processing_lock = threading.Lock()
 
 def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process PDF task - mock implementation
+    Process PDF task
     """
     task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
     thread_id = threading.current_thread().ident
@@ -131,7 +132,7 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
 
 def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process text task - mock implementation
+    Process text task 
     """
     task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
     thread_id = threading.current_thread().ident
@@ -195,18 +196,62 @@ def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     print(f"[Thread {thread_id}] Completed text task {task_id} after {processing_time:.2f}s")
     return result
 
-def process_test_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
+def process_youtube_video(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process test task - mock implementation
+    Process PDF task
     """
-    task_id = task_data.get('id', f'test_{random.randint(1000, 9999)}')
+
+    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
     thread_id = threading.current_thread().ident
     
-    print(f"[Thread {thread_id}] Starting test task {task_id}")
+    print(f"[Thread {thread_id}] Starting text processing task {task_id}")
+    print(f"[Thread {thread_id}] Task data: {task_data}")
     
+    # Extract documentId and userId from task_data
+    document_id = task_data.get('documentId')
+    user_id = task_data.get('userId')
+    
+    if not document_id or not user_id:
+        print(f"[Thread {thread_id}] Missing documentId or userId in task data")
+        return {
+            'task_id': task_id,
+            'error': 'Missing documentId or userId',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Fetch document content from MongoDB
+    content = fetch_document_content(document_id, user_id)
+    if not content:
+        print(f"[Thread {thread_id}] Could not fetch content for document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Document not found or empty content',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Track processing time
     start_time = time.time()
+    transcript = get_transcript(content)
+    result_data = generate_stuff(transcript)
     processing_time = time.time() - start_time
-        
+
+    # Parse result data and save to MongoDB
+    update_success = update_document_content(document_id, user_id, result_data)
+    
+    if not update_success:
+        print(f"[Thread {thread_id}] Failed to update document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Failed to update document in MongoDB',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
     result = {
         'task_id': task_id,
         'input': task_data,
@@ -216,8 +261,11 @@ def process_test_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
         'processed_at': time.time()
     }
     
-    print(f"[Thread {thread_id}] Completed test task {task_id} after {processing_time:.2f}s")
+    print(f"[Thread {thread_id}] Completed text task {task_id} after {processing_time:.2f}s")
     return result
+
+def process_website_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
+    pass
 
 def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
     """
@@ -238,6 +286,10 @@ def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
             result = process_pdf_task(task_data)
         elif queue_name == 'process-text':
             result = process_text_task(task_data)
+        elif queue_name == 'process-ytvideo':
+            result = process_youtube_video(task_data)
+        elif queue_name == 'process-website':
+            result = process_website_task(task_data)
         else:
             print(f"Unknown queue: {queue_name}, processing as test task")
             result = process_test_task(task_data)
@@ -303,7 +355,7 @@ def start_worker():
         return
     
     # Queues to monitor
-    queues = ['process-pdf', 'process-text']
+    queues = ['process-pdf', 'process-text', 'process-ytvideo', 'process-website']
     
     print(f'Monitoring queues: {queues}')
     print('Worker is ready and waiting for tasks...\n')
