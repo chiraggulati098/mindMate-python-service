@@ -1,5 +1,6 @@
 import os
 import dotenv
+import asyncio
 import redis
 import json
 import time
@@ -13,6 +14,7 @@ from utils.mongodb import fetch_document_content, update_document_content, fetch
 from utils.pdf_processor import process_pdf
 from utils.s3_client import download_file_from_url, download_file_from_s3_key, cleanup_temp_file, test_s3_bucket_access
 from utils.youtube_lib import get_transcript
+from utils.web_scrape import scrape_website
 
 dotenv.load_dotenv()
 
@@ -265,7 +267,71 @@ def process_youtube_video(task_data: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 def process_website_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
-    pass
+    """
+    Process website task 
+    """
+    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    thread_id = threading.current_thread().ident
+    
+    print(f"[Thread {thread_id}] Starting website processing task {task_id}")
+    print(f"[Thread {thread_id}] Task data: {task_data}")
+    
+    # Extract documentId and userId from task_data
+    document_id = task_data.get('documentId')
+    user_id = task_data.get('userId')
+    
+    if not document_id or not user_id:
+        print(f"[Thread {thread_id}] Missing documentId or userId in task data")
+        return {
+            'task_id': task_id,
+            'error': 'Missing documentId or userId',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Fetch document content from MongoDB
+    content = fetch_document_content(document_id, user_id)
+    if not content:
+        print(f"[Thread {thread_id}] Could not fetch content for document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Document not found or empty content',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    # Track processing time
+    start_time = time.time()
+    scraped_content = asyncio.run(scrape_website("https://www.geeksforgeeks.org/dsa/array-data-structure-guide/"))
+    result_data = generate_stuff(scraped_content)
+    processing_time = time.time() - start_time
+
+    # Parse result data and save to MongoDB
+    update_success = update_document_content(document_id, user_id, result_data)
+    
+    if not update_success:
+        print(f"[Thread {thread_id}] Failed to update document {document_id}")
+        return {
+            'task_id': task_id,
+            'error': 'Failed to update document in MongoDB',
+            'status': 'failed',
+            'thread_id': thread_id,
+            'processed_at': time.time()
+        }
+    
+    result = {
+        'task_id': task_id,
+        'input': task_data,
+        'processing_time': processing_time,
+        'status': 'completed',
+        'thread_id': thread_id,
+        'processed_at': time.time()
+    }
+    
+    print(f"[Thread {thread_id}] Completed website task {task_id} after {processing_time:.2f}s")
+    return result
 
 def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
     """
