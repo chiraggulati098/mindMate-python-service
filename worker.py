@@ -5,6 +5,8 @@ import redis
 import json
 import time
 import random
+import uuid
+import hashlib
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
@@ -37,7 +39,7 @@ def process_pdf_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process PDF task
     """
-    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    task_id = task_data.get('id', f"{uuid.uuid1()}_{hashlib.md5(json.dumps(task_data, sort_keys=True).encode()).hexdigest()[:8]}")
     thread_id = threading.current_thread().ident
     
     print(f"[Thread {thread_id}] Starting text processing task {task_id}")
@@ -136,7 +138,7 @@ def process_text_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process text task 
     """
-    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    task_id = task_data.get('id', f"{uuid.uuid1()}_{hashlib.md5(json.dumps(task_data, sort_keys=True).encode()).hexdigest()[:8]}")
     thread_id = threading.current_thread().ident
     
     print(f"[Thread {thread_id}] Starting text processing task {task_id}")
@@ -203,7 +205,7 @@ def process_youtube_video(task_data: Dict[str, Any]) -> Dict[str, Any]:
     Process PDF task
     """
 
-    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    task_id = task_data.get('id', f"{uuid.uuid1()}_{hashlib.md5(json.dumps(task_data, sort_keys=True).encode()).hexdigest()[:8]}")
     thread_id = threading.current_thread().ident
     
     print(f"[Thread {thread_id}] Starting text processing task {task_id}")
@@ -270,7 +272,7 @@ def process_website_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process website task 
     """
-    task_id = task_data.get('id', f'task_{random.randint(1000, 9999)}')
+    task_id = task_data.get('id', f"{uuid.uuid1()}_{hashlib.md5(json.dumps(task_data, sort_keys=True).encode()).hexdigest()[:8]}")
     thread_id = threading.current_thread().ident
     
     print(f"[Thread {thread_id}] Starting website processing task {task_id}")
