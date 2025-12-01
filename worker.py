@@ -292,7 +292,6 @@ def process_task(queue_name: str, task_data: Dict[str, Any]) -> None:
             result = process_website_task(task_data)
         else:
             print(f"Unknown queue: {queue_name}, processing as test task")
-            result = process_test_task(task_data)
         
         # what to do with result
         
