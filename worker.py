@@ -17,6 +17,7 @@ from utils.pdf_processor import process_pdf
 from utils.s3_client import download_file_from_url, download_file_from_s3_key, cleanup_temp_file, test_s3_bucket_access
 from utils.youtube_lib import get_transcript
 from utils.web_scrape import scrape_website
+from utils.rag import VectorStore
 
 dotenv.load_dotenv()
 
@@ -306,7 +307,7 @@ def process_website_task(task_data: Dict[str, Any]) -> Dict[str, Any]:
     
     # Track processing time
     start_time = time.time()
-    scraped_content = asyncio.run(scrape_website("https://www.geeksforgeeks.org/dsa/array-data-structure-guide/"))
+    scraped_content = asyncio.run(scrape_website(content))
     result_data = generate_stuff(scraped_content)
     processing_time = time.time() - start_time
 
@@ -420,6 +421,8 @@ def start_worker():
     except redis.RedisError as e:
         print(f'✗ Redis connection failed: {e}')
         return
+
+    # store = VectorStore()
     
     # Queues to monitor
     queues = ['process-pdf', 'process-text', 'process-ytvideo', 'process-website']
